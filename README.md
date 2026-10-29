@@ -1,31 +1,119 @@
-# Portal Evil HUEBR for M5 STICK C PLUS
+# Portal Evil HUEBR — M5StickC Plus
 
-BY: https://github.com/raphntc/
+> An educational captive portal ("Evil Portal") for the **M5StickC Plus**, built for Wi-Fi security awareness, demos, and research.
 
-en-US
+**Author:** [github.com/raphntc](https://github.com/raphntc/)
+**License:** [MIT](LICENSE)
 
-Hiding in plain sight, Wi-Fi honeypots are deceitful wireless networks masquerading as legitimate hotspots. They act like digital sirens, luring unsuspecting users with the promise of free internet access. But behind this facade lies a sinister reality: a trap designed to steal your data or infect your devices with malicious software. These honey traps, often deployed by hackers and cybercriminals, exploit the public's insatiable thirst for free Wi-Fi, turning our desire for connection into a vulnerability.
+---
 
-This is an Evil Portal developed for the M5STICK C PLUS!
+## ⚠️ Disclaimer
 
-pt-BR
+**EN** — This code is provided **for educational and authorized security-testing purposes only**. Do not use it against networks, devices, or people without **explicit permission**. Capturing credentials from users who have not consented is illegal in most jurisdictions. You are solely responsible for how you use this software, and you assume all associated risks.
 
-Escondidos à vista de todos, os honeypots Wi-Fi são redes sem fio enganosas que se disfarçam de hotspots legítimos. Eles agem como sirenes digitais, atraindo usuários desavisados com a promessa de acesso gratuito à Internet. Mas por trás dessa fachada existe uma realidade sinistra: uma armadilha projetada para roubar seus dados ou infectar seus dispositivos com software malicioso. Estas armadilhas, frequentemente utilizadas por hackers e cibercriminosos, exploram a sede insaciável do público por Wi-Fi gratuito, transformando o nosso desejo de ligação numa vulnerabilidade.
+This project is **not affiliated with, endorsed by, or supported by Facebook/Meta** or any other brand referenced in the demo page. Those names and layouts are used only to illustrate how phishing portals impersonate well-known services.
 
-Este é um Portal Evil desenvolvido para o M5STICK C PLUS!
+**PT-BR** — Este código é fornecido **apenas para fins educacionais e testes de segurança autorizados**. Não o utilize contra redes, dispositivos ou pessoas sem **permissão explícita**. Capturar credenciais de usuários que não consentiram é ilegal na maioria dos países. Você é o único responsável pelo uso deste software e assume todos os riscos envolvidos.
 
-Para vizualizar as credenciais acesse: https://172.0.0.1/creds  (Lembrando que precisa estar conectado na rede :v)
+Este projeto **não é afiliado, endossado ou suportado pelo Facebook/Meta** nem por qualquer outra marca citada na página de demonstração. Esses nomes e layouts são usados somente para ilustrar como portais de phishing imitam serviços conhecidos.
 
-Disclaimer
+---
 
-This code is for educational purposes only and should not be used for malicious purposes. The use of this code is at your own risk and you should be aware of the risks involved.
+## 📖 About / Sobre
 
-This code is not affiliated with Facebook and is not supported by Facebook. Facebook is not responsible for any damage or loss that may result from the use of this code.
+**EN** — Wi-Fi honeypots are deceptive wireless networks that masquerade as legitimate hotspots. They lure users with the promise of free internet, then present a fake "sign-in" page to harvest data. This project recreates that scenario on cheap, pocket-sized hardware so students, educators, and security professionals can **see the technique in action** and learn to recognize and defend against it.
 
-Disclaimer
+**PT-BR** — Honeypots Wi-Fi são redes sem fio enganosas que se disfarçam de hotspots legítimos. Elas atraem usuários com a promessa de internet gratuita e então exibem uma página falsa de "login" para roubar dados. Este projeto recria esse cenário em um hardware barato e de bolso, para que estudantes, educadores e profissionais de segurança possam **ver a técnica em ação** e aprender a reconhecê-la e se defender dela.
 
-Este código é apenas para fins educacionais e não deve ser usado para fins maliciosos. O uso deste código é de sua responsabilidade e você deve estar ciente dos riscos envolvidos.
+---
 
-Este código não é afiliado ao Facebook e não é suportado pelo Facebook. O Facebook não é responsável por qualquer dano ou perda que possa resultar do uso deste código.
+## ✨ Features
+
+- 📶 Creates an **open Wi-Fi access point** with a configurable SSID (default: `Wi-Fi Gratis`)
+- 🌐 **Captive portal** via DNS spoofing — any requested domain is redirected to the portal page
+- 🔐 Serves a customizable fake **sign-in page** and stores submitted credentials in memory
+- 🖥️ Live stats on the built-in LCD: SSID, gateway IP, and **victim/capture count**
+- 🔊 **Beep + LED blink** feedback whenever a submission is received
+- 📋 Review captured entries at `/creds` and reset them at `/clear`
+- 🧩 Single-file Arduino sketch — easy to read, modify, and flash
+
+---
+
+## 🛠️ Hardware
+
+- **M5StickC Plus** (ESP32-PICO based)
+- USB-C cable for flashing and power
+
+---
+
+## 📦 Requirements
+
+- [Arduino IDE](https://www.arduino.cc/en/software) (or Arduino CLI / PlatformIO)
+- **ESP32 board support** installed via Boards Manager
+- Libraries:
+  - `M5StickCPlus`
+  - `WiFi`, `DNSServer`, `WebServer` (bundled with the ESP32 core)
+
+---
+
+## 🚀 Installation / Flashing
+
+1. Install the **Arduino IDE** and add ESP32 board support
+   (Boards Manager URL: `https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json`).
+2. Open **Tools → Manage Libraries** and install **`M5StickCPlus`**.
+3. Open [`portal-evil-huebr/portal-evil-huebr.ino`](portal-evil-huebr/portal-evil-huebr.ino).
+4. Select the board **M5Stick-C** (or **ESP32 PICO-D4**) and the correct COM/serial port.
+5. Click **Upload**.
+
+---
+
+## ▶️ Usage
+
+1. After flashing, the device broadcasts the configured open Wi-Fi network.
+2. When a device connects, the captive portal automatically opens the fake sign-in page.
+3. Submissions are stored in memory; the LCD shows the current capture count.
+4. View captured credentials (while connected to the AP):
+
+   ```
+   http://172.0.0.1/creds
+   ```
+
+5. Clear the stored list:
+
+   ```
+   http://172.0.0.1/clear
+   ```
+
+> Captured data lives only in RAM and is lost on reboot.
+
+---
+
+## ⚙️ Configuration
+
+All portal text and branding are set with `#define` values near the top of
+[`portal-evil-huebr.ino`](portal-evil-huebr/portal-evil-huebr.ino):
+
+| Define        | Purpose                                  | Default            |
+| ------------- | ---------------------------------------- | ------------------ |
+| `SSID_NAME`   | Name of the broadcast Wi-Fi network      | `Wi-Fi Gratis`     |
+| `SUBTITLE`    | Portal header subtitle                   | `E-CORP service.`  |
+| `TITLE`       | Sign-in page title                       | `Sign in:`         |
+| `BODY`        | Sign-in page body text                   | —                  |
+| `POST_TITLE`  | Post-submission title                    | `Validando Acesso...` |
+| `PASS_TITLE`  | Credentials page title                   | `Credentials`      |
+
+The login page markup is defined in the `index()` function — edit it to change the look or the service being impersonated for your demo.
+
+---
+
+## 🙌 Credits
+
+Based on work by:
+
+- [n0xa](https://github.com/n0xa/) — original Evil Portal
+- [Kuush01](https://github.com/Kuush01) — modifications
+- [raphntc](https://github.com/raphntc) — M5StickC Plus port and further improvements
+
+---
 
 ![WhatsApp Image 2023-12-15 at 02 28 56](https://github.com/raphntc/Portal-Evil-HUEBR/assets/112436208/a3369115-f965-43ab-a334-99518f61ab5e)
