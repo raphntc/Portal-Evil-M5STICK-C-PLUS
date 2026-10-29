@@ -34,7 +34,7 @@ Este projeto **não é afiliado, endossado ou suportado pelo Facebook/Meta** nem
 - 🔐 Serves a customizable fake **sign-in page** and stores submitted credentials in memory
 - 🖥️ Live stats on the built-in LCD: SSID, gateway IP, and **victim/capture count**
 - 🔊 **Beep + LED blink** feedback whenever a submission is received
-- 📋 Review captured entries at `/creds` and reset them at `/clear`
+- 📋 **Operator dashboard** at `/creds` — dark-theme page with stat tiles (stored entries, total captures, uptime), a table of captures (newest first, with capture time), auto-refresh, and one-click reset at `/clear`
 - 🧩 Single-file Arduino sketch — easy to read, modify, and flash
 
 ---
@@ -105,14 +105,14 @@ This project is also published in **[M5Burner](https://docs.m5stack.com/en/downl
 All portal text and branding are set with `#define` values near the top of
 [`portal-evil-huebr.ino`](portal-evil-huebr/portal-evil-huebr.ino):
 
-| Define        | Purpose                                  | Default            |
-| ------------- | ---------------------------------------- | ------------------ |
-| `SSID_NAME`   | Name of the broadcast Wi-Fi network      | `Wi-Fi Gratis`     |
-| `SUBTITLE`    | Portal header subtitle                   | `E-CORP service.`  |
-| `TITLE`       | Sign-in page title                       | `Sign in:`         |
-| `BODY`        | Sign-in page body text                   | —                  |
-| `POST_TITLE`  | Post-submission title                    | `Validando Acesso...` |
-| `PASS_TITLE`  | Credentials page title                   | `Credentials`      |
+| Define        | Purpose                                         | Default               |
+| ------------- | ----------------------------------------------- | --------------------- |
+| `SSID_NAME`   | Name of the broadcast Wi-Fi network             | `Wi-Fi Gratis`        |
+| `SUBTITLE`    | Header subtitle on the post/admin pages         | `E-CORP service.`     |
+| `POST_TITLE`  | Title shown after a submission                  | `Validando Acesso...` |
+| `POST_BODY`   | Body text shown after a submission              | (Portuguese message)  |
+| `PASS_TITLE`  | Title of the credentials page (`/creds`)        | `Credentials`         |
+| `CLEAR_TITLE` | Title of the reset-confirmation page (`/clear`) | `Cleared`             |
 
 The login page markup is defined in the `index()` function — edit it to change the look or the service being impersonated for your demo.
 
