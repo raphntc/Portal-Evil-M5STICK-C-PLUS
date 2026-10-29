@@ -58,6 +58,18 @@ Este projeto **não é afiliado, endossado ou suportado pelo Facebook/Meta** nem
 
 ## 🚀 Installation / Flashing
 
+### Option A — M5Burner (easiest, no compiling)
+
+This project is also published in **[M5Burner](https://docs.m5stack.com/en/download)**, M5Stack's official firmware tool. No Arduino IDE or compilation required.
+
+1. Download and open **M5Burner**.
+2. Search for **Portal Evil HUEBR** in the firmware list.
+3. Connect your M5StickC Plus via USB-C, select the COM/serial port, and click **Burn**.
+
+> **PT-BR:** O projeto também está disponível no **M5Burner**, o aplicativo oficial da M5Stack. Basta procurar por **Portal Evil HUEBR**, conectar o dispositivo e clicar em **Burn** — sem precisar compilar nada.
+
+### Option B — Arduino IDE (build from source)
+
 1. Install the **Arduino IDE** and add ESP32 board support
    (Boards Manager URL: `https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json`).
 2. Open **Tools → Manage Libraries** and install **`M5StickCPlus`**.
