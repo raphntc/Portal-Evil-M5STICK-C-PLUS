@@ -31,9 +31,10 @@ Este projeto **não é afiliado, endossado ou suportado pelo Facebook/Meta** nem
 
 - 📶 Creates an **open Wi-Fi access point** with a configurable SSID (default: `Wi-Fi Gratis`)
 - 🌐 **Captive portal** via DNS spoofing — any requested domain is redirected to the portal page
-- 🔐 Serves a customizable fake **sign-in page** and stores submitted credentials in memory
+- 🔐 Serves a customizable fake **sign-in page** and stores submitted credentials in memory (HTML-escaped on capture)
+- ⏳ **Animated "validating access" page** after submission — pure CSS/JS (works offline): pulsing Wi-Fi icon, indeterminate progress bar, spinner and a live countdown
 - 🖥️ Live stats on the built-in LCD: SSID, gateway IP, and **victim/capture count**
-- 🔊 **Beep + LED blink** feedback whenever a submission is received
+- 🔊 **Beep + non-blocking LED blink** feedback whenever a submission is received (DNS/HTTP keep serving during the blink)
 - 📋 **Operator dashboard** at `/creds` — dark-theme page with stat tiles (stored entries, total captures, uptime), a table of captures (newest first, with capture time), auto-refresh, and one-click reset at `/clear`
 - 🧩 Single-file Arduino sketch — easy to read, modify, and flash
 
@@ -83,20 +84,29 @@ This project is also published in **[M5Burner](https://docs.m5stack.com/en/downl
 
 1. After flashing, the device broadcasts the configured open Wi-Fi network.
 2. When a device connects, the captive portal automatically opens the fake sign-in page.
-3. Submissions are stored in memory; the LCD shows the current capture count.
-4. View captured credentials (while connected to the AP):
+3. On submission, the device beeps, blinks its LED, bumps the LCD capture count, and the connected device sees the animated **"validating access"** page.
+4. Submissions are stored in RAM. Review them on the operator dashboard (while connected to the AP):
 
    ```
    http://172.0.0.1/creds
    ```
 
-5. Clear the stored list:
+5. Reset the stored list from the dashboard's **Clear all** button, or directly:
 
    ```
    http://172.0.0.1/clear
    ```
 
 > Captured data lives only in RAM and is lost on reboot.
+
+### Pages / endpoints
+
+| Path     | Audience | Description                                                                 |
+| -------- | -------- | --------------------------------------------------------------------------- |
+| `/`      | Victim   | Fake sign-in page (any unknown URL redirects here via the captive portal)   |
+| `/post`  | Victim   | Receives the form, stores the entry, returns the animated "validating" page |
+| `/creds` | Operator | Dashboard: stat tiles + table of captures (auto-refreshes every 15 s)       |
+| `/clear` | Operator | Clears all stored entries and the stored-entries counter                    |
 
 ---
 
