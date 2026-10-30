@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="logo.jpg" alt="Portal Evil HUEBR logo" width="420">
+
 # ⚡ Portal Evil HUEBR
 
 ### Educational captive portal (“Evil Portal”) for the **M5StickC Plus**
@@ -13,8 +15,6 @@ _Built for Wi-Fi security awareness, live demos, and research._
   <img src="https://img.shields.io/badge/Built%20with-Arduino-00979D?style=for-the-badge&logo=arduino&logoColor=white" alt="Built with Arduino">
   <img src="https://img.shields.io/badge/Purpose-Educational-2ea44f?style=for-the-badge" alt="Purpose: Educational">
 </p>
-
-<img src="https://github.com/raphntc/Portal-Evil-HUEBR/assets/112436208/a3369115-f965-43ab-a334-99518f61ab5e" alt="Portal Evil HUEBR running on an M5StickC Plus" width="440">
 
 **Author:** [@raphntc](https://github.com/raphntc/) &nbsp;·&nbsp; **License:** [MIT](LICENSE)
 
@@ -53,6 +53,18 @@ Wi-Fi honeypots are deceptive wireless networks that masquerade as legitimate ho
 Honeypots Wi-Fi são redes sem fio enganosas que se disfarçam de hotspots legítimos. Elas atraem usuários com a promessa de internet gratuita e então exibem uma página falsa de “login” para roubar dados. Este projeto recria esse cenário em um hardware barato e de bolso, para que estudantes, educadores e profissionais de segurança possam **ver a técnica em ação** e aprender a reconhecê-la e se defender dela.
 
 </details>
+
+---
+
+## 📸 Preview
+
+<div align="center">
+
+<img src="https://github.com/raphntc/Portal-Evil-HUEBR/assets/112436208/a3369115-f965-43ab-a334-99518f61ab5e" alt="Portal Evil HUEBR running on an M5StickC Plus" width="440">
+
+<sub><i>Portal Evil HUEBR running on the M5StickC Plus</i></sub>
+
+</div>
 
 ---
 
