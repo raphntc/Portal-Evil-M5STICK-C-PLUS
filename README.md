@@ -119,6 +119,27 @@ This project is also published in **[M5Burner](https://docs.m5stack.com/en/downl
 4. Select the board **M5Stick-C** (or **ESP32 PICO-D4**) and the correct COM/serial port.
 5. Click **Upload**.
 
+### ⚙️ Option C — Build the `.bin` with a script <sub>(for M5Burner)</sub>
+
+Generate the firmware `.bin` yourself — handy to flash a customized build in M5Burner. The only prerequisite is **[arduino-cli](https://arduino.github.io/arduino-cli/latest/installation/)** on your `PATH`; the scripts install the ESP32 core and the `M5StickCPlus` library automatically.
+
+| Platform | Command |
+| --- | --- |
+| 🪟 **Windows (double-click)** | Double-click **`build.bat`** |
+| 🪟 Windows (PowerShell) | `powershell -ExecutionPolicy Bypass -File scripts\build.ps1` |
+| 🐧🍎 Linux / macOS / Git Bash | `./scripts/build.sh` |
+
+The build writes two files to the **`firmware/`** folder:
+
+| File | Flash offset | Use |
+| --- | --- | --- |
+| `portal-evil-huebr-m5stickcplus-merged.bin` | **`0x0`** | ✅ **Upload this one to M5Burner** (full image: bootloader + partitions + app) |
+| `portal-evil-huebr-m5stickcplus-app.bin` | `0x10000` | App only — for tools that flash the app at its offset |
+
+> **M5Burner:** add a custom firmware, pick the **`-merged.bin`**, and (if asked for an address) write it at **`0x0`**.
+
+> **🇧🇷 PT-BR:** No Windows, é só dar **duplo-clique em `build.bat`**. Ele compila e gera o `.bin` na pasta `firmware/`. No M5Burner, envie o arquivo **`-merged.bin`** (grava em `0x0`).
+
 ---
 
 ## ▶️ Usage
