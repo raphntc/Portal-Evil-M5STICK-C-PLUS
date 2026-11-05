@@ -40,6 +40,9 @@ const unsigned long BLINK_INTERVAL = 150;  // ms between toggles
 #define C_CARD    RGB565(26, 29, 36)     // counter card
 #define C_COUNT   RGB565(255, 196, 0)    // victim count (amber)
 #define C_DANGER  RGB565(229, 72, 77)    // low-battery fill (red)
+#define C_BONE    RGB565(236, 239, 244)  // skull bone (off-white)
+#define C_EYE     RGB565(255, 40, 40)    // skull eyes, bright glow
+#define C_EYEDIM  RGB565(120, 16, 16)    // skull eyes, dim glow
 bool dotOn = false;
 
 // -------- App menu / state machine --------
@@ -344,29 +347,123 @@ void drawBattery() {
   drawBatteryAt(208, 38, C_MUTED, C_BG);
 }
 
-// Animated boot splash: wordmark + a progress bar that fills once.
+// 8-bit skull bitmap: 14 columns x 16 rows, drawn as chunky pixels.
+// 'B' = bone (drawn), anything else = background (eye sockets / nose / mouth
+// show through as dark). The last five rows differ between the two frames so
+// the jaw drops open and shut -> the skull looks like it's laughing.
+#define SK_COLS 14
+#define SK_ROWS 16
+static const char* SK_CLOSED[SK_ROWS] = {
+  "...BBBBBBBB...",  // cranium
+  "..BBBBBBBBBB..",
+  ".BBBBBBBBBBBB.",
+  "BBBBBBBBBBBBBB",
+  "BBBBBBBBBBBBBB",
+  "BB..BBBBBB..BB",  // eye sockets
+  "BB..BBBBBB..BB",
+  "BB..BBBBBB..BB",
+  "BBBBBB..BBBBBB",  // nose
+  "BBBBBB..BBBBBB",
+  ".BBBBBBBBBBBB.",
+  ".BBBBBBBBBBBB.",  // mouth closed (grin)
+  "..BBBBBBBBBB..",
+  "..B.B.B.B.B...",  // teeth
+  "...BBBBBBBB...",
+  ".............."
+};
+static const char* SK_OPEN[SK_ROWS] = {
+  "...BBBBBBBB...",  // cranium (identical top)
+  "..BBBBBBBBBB..",
+  ".BBBBBBBBBBBB.",
+  "BBBBBBBBBBBBBB",
+  "BBBBBBBBBBBBBB",
+  "BB..BBBBBB..BB",
+  "BB..BBBBBB..BB",
+  "BB..BBBBBB..BB",
+  "BBBBBB..BBBBBB",
+  "BBBBBB..BBBBBB",
+  ".BBBBBBBBBBBB.",
+  ".BBBBBBBBBBBB.",  // upper lip
+  "..BBBBBBBBBB..",  // upper teeth
+  "..B.B.B.B.B...",  // teeth
+  "..............",  // mouth wide open (dark gap)
+  "...BBBBBBBB..."   // dropped lower jaw
+};
+
+// Render one skull frame. `open` picks the jaw state; `eyeCol` lets the eyes
+// pulse between bright and dim red.
+void drawSkull(int ox, int oy, int px, bool open, uint16_t eyeCol) {
+  const char** rows = open ? SK_OPEN : SK_CLOSED;
+  for (int r = 0; r < SK_ROWS; r++) {
+    const char* row = rows[r];
+    for (int c = 0; c < SK_COLS; c++) {
+      if (row[c] == 'B') {
+        M5.Lcd.fillRect(ox + c * px, oy + r * px, px, px, C_BONE);
+      }
+    }
+  }
+  // Glowing eyes fill the two sockets (cols 2-3 and 10-11, rows 5-7).
+  M5.Lcd.fillRect(ox + 2 * px,  oy + 5 * px, 2 * px, 3 * px, eyeCol);
+  M5.Lcd.fillRect(ox + 10 * px, oy + 5 * px, 2 * px, 3 * px, eyeCol);
+}
+
+// Boot splash: an 8-bit skull that laughs (jaw open/shut, pulsing red eyes,
+// bobbing head) with a "HA HA HA!" burst and a progress bar. Runs ~5 seconds.
 void bootScreen() {
   M5.Lcd.fillScreen(C_BG);
 
+  // Static elements (drawn once): caption + progress-bar outline.
   M5.Lcd.setTextDatum(MC_DATUM);
-  M5.Lcd.setTextSize(3);
-  M5.Lcd.setTextColor(C_ACCENT2, C_BG);
-  M5.Lcd.drawString("PORTAL", 120, 36);
-  M5.Lcd.setTextColor(TFT_WHITE, C_BG);
-  M5.Lcd.drawString("EVIL", 120, 66);
-
   M5.Lcd.setTextSize(1);
   M5.Lcd.setTextColor(C_MUTED, C_BG);
-  M5.Lcd.drawString("HUEBR  -  initializing", 120, 92);
+  M5.Lcd.drawString("PORTAL EVIL HUEBR  -  loading", 120, 112);
+  const int bx = 40, by = 122, bw = 160, bh = 8;
+  M5.Lcd.drawRoundRect(bx, by, bw, bh, 3, C_MUTED);
 
-  const int bx = 30, by = 108, bw = 180, bh = 12;
-  M5.Lcd.drawRoundRect(bx, by, bw, bh, 4, C_MUTED);
-  for (int p = 0; p <= 100; p += 2) {
-    int w = (bw - 6) * p / 100;
+  const int px = 5;                 // skull pixel size (14*5 x 16*5 = 70x80)
+  const int ox = (240 - SK_COLS * px) / 2;  // centered horizontally
+  const int oyBase = 6;
+  const unsigned long DURATION = 5000;  // ~5 seconds
+  unsigned long start = millis();
+  bool open = false;
+
+  while (millis() - start < DURATION) {
+    unsigned long el = millis() - start;
+    open = !open;
+    int bob = open ? 2 : 0;  // head/jaw bob
+
+    // Clear the skull + laugh-text band, then redraw this frame.
+    M5.Lcd.fillRect(0, 4, 240, 104, C_BG);
+    drawSkull(ox, oyBase + bob, px, open, open ? C_EYE : C_EYEDIM);
+
+    // "HA HA HA!" burst on the open-jaw frames.
+    if (open) {
+      M5.Lcd.setTextDatum(MC_DATUM);
+      M5.Lcd.setTextSize(2);
+      M5.Lcd.setTextColor(C_EYE, C_BG);
+      M5.Lcd.drawString("HA HA HA!", 120, 98);
+    }
+
+    // Progress bar tracks elapsed time.
+    int w = (int)((long)(bw - 6) * el / DURATION);
+    if (w > bw - 6) w = bw - 6;
     M5.Lcd.fillRoundRect(bx + 3, by + 3, w, bh - 6, 2, C_ACCENT);
-    delay(18);
+
+    // Short 8-bit "laugh" blip on each open frame (muteable via Config).
+    if (soundOn && open) {
+      M5.Beep.tone(1500);
+      delay(45);
+      M5.Beep.tone(1100);
+      delay(45);
+      M5.Beep.mute();
+    }
+
+    delay(180);
   }
-  delay(200);
+
+  // Ensure the bar reads full before leaving.
+  M5.Lcd.fillRoundRect(bx + 3, by + 3, bw - 6, bh - 6, 2, C_ACCENT);
+  delay(150);
 }
 
 // Full dashboard repaint: header, SSID, gateway, and the victim-count card.

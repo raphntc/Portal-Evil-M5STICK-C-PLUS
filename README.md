@@ -76,9 +76,11 @@ Honeypots Wi-Fi são redes sem fio enganosas que se disfarçam de hotspots legí
 | 🌐 | **Captive portal** via DNS spoofing — any requested domain is redirected to the portal page |
 | 🔐 | Serves a customizable fake **sign-in page** and stores submitted credentials in memory (HTML-escaped on capture) |
 | ⏳ | **Animated “validating access” page** after submission — pure CSS/JS (works offline): pulsing Wi-Fi icon, indeterminate progress bar, spinner and a live countdown |
-| 🖥️ | Live stats on the built-in LCD: SSID, gateway IP, and **victim/capture count** |
-| 🔊 | **Beep + non-blocking LED blink** feedback on every submission (DNS/HTTP keep serving during the blink) |
-| 📋 | **Operator dashboard** at `/creds` — dark theme, stat tiles, capture table (newest first, with capture time), auto-refresh, and one-click reset |
+| 💀 | **8-bit laughing-skull boot animation** (~5 s) — pixel-art skull with a dropping jaw, pulsing red eyes, a “HA HA HA!” burst and a progress bar |
+| 🎛️ | **On-device menu** on boot (Tools / Configuration / Exit) — the portal no longer auto-starts; navigate with the two buttons and launch it on demand |
+| 🖥️ | Live stats on the built-in LCD: SSID, the **admin URL** (`http://172.0.0.1/admin`), a **battery gauge** (cell icon + %), and the **victim/capture count** |
+| 🔊 | **Beep + non-blocking LED blink** feedback on every submission (DNS/HTTP keep serving during the blink), both toggleable from the Configuration menu |
+| 📋 | **Operator dashboard** at `/admin` — dark theme, stat tiles, capture table (newest first, with capture time), auto-refresh, and one-click reset |
 | 🧩 | **Single-file Arduino sketch** — easy to read, modify, and flash |
 
 ---
@@ -144,16 +146,37 @@ The build writes two files to the **`firmware/`** folder:
 
 ## ▶️ Usage
 
-1. After flashing, the device broadcasts the configured open Wi-Fi network.
-2. When a device connects, the captive portal automatically opens the fake sign-in page.
-3. On submission, the device beeps, blinks its LED, bumps the LCD capture count, and the connected device sees the animated **“validating access”** page.
-4. Submissions are stored in RAM. Review them on the operator dashboard (while connected to the AP):
+1. On power-on, the device plays the **8-bit laughing-skull splash** (~5 s) and then opens the **main menu** — it does **not** start the portal automatically.
+2. Use the two buttons to navigate the menu:
+   - **Side button (BtnB)** → move the highlight
+   - **Front button (BtnA)** → select
+3. Choose **Tools → Start Evil Portal** to bring up the open Wi-Fi access point, DNS redirect, and web server, and switch to the live LCD dashboard.
+4. When a device connects, the captive portal automatically opens the fake sign-in page.
+5. On submission, the device beeps, blinks its LED, bumps the LCD capture count, and the connected device sees the animated **“validating access”** page.
+6. Submissions are stored in RAM. Review them on the operator dashboard (while connected to the AP):
 
    ```
-   http://172.0.0.1/creds
+   http://172.0.0.1/admin
    ```
 
-5. Reset the stored list from the dashboard’s **Clear all** button, or directly at `http://172.0.0.1/clear`.
+7. Reset the stored list from the dashboard’s **Clear all** button, or directly at `http://172.0.0.1/clear`.
+8. While the portal is running, **hold the side button (BtnB) for ~1 s** to stop it and return to the menu.
+
+### 🎛️ On-device menu
+
+| Menu | Option | Action |
+| --- | --- | --- |
+| **Main** | `Tools` / `Configuration` / `Exit` | Enter a submenu, or power off (`Exit` → confirm) |
+| **Tools** | `Start Evil Portal` | Start the AP + captive portal and show the dashboard |
+| | `Device Info` | Show SSID, admin URL, and portal status |
+| | `Back` | Return to the main menu |
+| **Configuration** | `Beep: ON/OFF` | Toggle the capture/boot beep |
+| | `LED blink: ON/OFF` | Toggle the LED blink on capture |
+| | `Brightness: 1/2/3` | Cycle the screen brightness |
+| | `Back` | Return to the main menu |
+
+> [!NOTE]
+> Configuration settings live in RAM and reset to their defaults on each power-on.
 
 > [!IMPORTANT]
 > Captured data lives **only in RAM** and is lost on reboot.
@@ -164,7 +187,7 @@ The build writes two files to the **`firmware/`** folder:
 | --- | --- | --- |
 | `/` | 🎣 Victim | Fake sign-in page (any unknown URL redirects here via the captive portal) |
 | `/post` | 🎣 Victim | Receives the form, stores the entry, returns the animated “validating” page |
-| `/creds` | 🛡️ Operator | Dashboard: stat tiles + table of captures (auto-refreshes every 15 s) |
+| `/admin` | 🛡️ Operator | Dashboard: stat tiles + table of captures (auto-refreshes every 15 s) |
 | `/clear` | 🛡️ Operator | Clears all stored entries and the stored-entries counter |
 
 ---
@@ -180,7 +203,7 @@ All portal text and branding are set with `#define` values near the top of
 | `SUBTITLE` | Header subtitle on the post/admin pages | `E-CORP service.` |
 | `POST_TITLE` | Title shown after a submission | `Validando Acesso...` |
 | `POST_BODY` | Body text shown after a submission | _(Portuguese message)_ |
-| `PASS_TITLE` | Title of the credentials page (`/creds`) | `Credentials` |
+| `PASS_TITLE` | Title of the credentials page (`/admin`) | `Credentials` |
 | `CLEAR_TITLE` | Title of the reset-confirmation page (`/clear`) | `Cleared` |
 
 > [!TIP]
