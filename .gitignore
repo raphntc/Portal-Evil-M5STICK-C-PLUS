@@ -7,3 +7,6 @@ portal-evil-huebr/build/
 *.bin
 *.elf
 *.map
+
+# Editor / IDE settings (machine-specific, e.g. VS Code C/C++ includePath)
+.vscode/
