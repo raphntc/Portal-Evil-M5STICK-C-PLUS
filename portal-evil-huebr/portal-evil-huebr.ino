@@ -40,7 +40,11 @@ const unsigned long BLINK_INTERVAL = 150;  // ms between toggles
 #define C_CARD    RGB565(26, 29, 36)     // counter card
 #define C_COUNT   RGB565(255, 196, 0)    // victim count (amber)
 #define C_DANGER  RGB565(229, 72, 77)    // low-battery fill (red)
-#define C_BONE    RGB565(236, 239, 244)  // skull bone (off-white)
+#define C_BONE    RGB565(226, 230, 238)  // skull bone, mid tone
+#define C_BONE_HI RGB565(255, 255, 255)  // skull bone, highlight
+#define C_BONE_SH RGB565(150, 158, 174)  // skull bone, shadow
+#define C_BONE_SH2 RGB565(96, 103, 118)  // skull bone, deep shadow / outline
+#define C_SOCKET  RGB565(10, 11, 16)     // eye sockets / nasal cavity (near black)
 #define C_EYE     RGB565(255, 40, 40)    // skull eyes, bright glow
 #define C_EYEDIM  RGB565(120, 16, 16)    // skull eyes, dim glow
 bool dotOn = false;
@@ -347,68 +351,79 @@ void drawBattery() {
   drawBatteryAt(208, 38, C_MUTED, C_BG);
 }
 
-// 8-bit skull bitmap: 14 columns x 16 rows, drawn as chunky pixels.
-// 'B' = bone (drawn), anything else = background (eye sockets / nose / mouth
-// show through as dark). The last five rows differ between the two frames so
-// the jaw drops open and shut -> the skull looks like it's laughing.
-#define SK_COLS 14
-#define SK_ROWS 16
-static const char* SK_CLOSED[SK_ROWS] = {
-  "...BBBBBBBB...",  // cranium
-  "..BBBBBBBBBB..",
-  ".BBBBBBBBBBBB.",
-  "BBBBBBBBBBBBBB",
-  "BBBBBBBBBBBBBB",
-  "BB..BBBBBB..BB",  // eye sockets
-  "BB..BBBBBB..BB",
-  "BB..BBBBBB..BB",
-  "BBBBBB..BBBBBB",  // nose
-  "BBBBBB..BBBBBB",
-  ".BBBBBBBBBBBB.",
-  ".BBBBBBBBBBBB.",  // mouth closed (grin)
-  "..BBBBBBBBBB..",
-  "..B.B.B.B.B...",  // teeth
-  "...BBBBBBBB...",
-  ".............."
-};
-static const char* SK_OPEN[SK_ROWS] = {
-  "...BBBBBBBB...",  // cranium (identical top)
-  "..BBBBBBBBBB..",
-  ".BBBBBBBBBBBB.",
-  "BBBBBBBBBBBBBB",
-  "BBBBBBBBBBBBBB",
-  "BB..BBBBBB..BB",
-  "BB..BBBBBB..BB",
-  "BB..BBBBBB..BB",
-  "BBBBBB..BBBBBB",
-  "BBBBBB..BBBBBB",
-  ".BBBBBBBBBBBB.",
-  ".BBBBBBBBBBBB.",  // upper lip
-  "..BBBBBBBBBB..",  // upper teeth
-  "..B.B.B.B.B...",  // teeth
-  "..............",  // mouth wide open (dark gap)
-  "...BBBBBBBB..."   // dropped lower jaw
-};
-
-// Render one skull frame. `open` picks the jaw state; `eyeCol` lets the eyes
-// pulse between bright and dim red.
-void drawSkull(int ox, int oy, int px, bool open, uint16_t eyeCol) {
-  const char** rows = open ? SK_OPEN : SK_CLOSED;
-  for (int r = 0; r < SK_ROWS; r++) {
-    const char* row = rows[r];
-    for (int c = 0; c < SK_COLS; c++) {
-      if (row[c] == 'B') {
-        M5.Lcd.fillRect(ox + c * px, oy + r * px, px, px, C_BONE);
-      }
-    }
-  }
-  // Glowing eyes fill the two sockets (cols 2-3 and 10-11, rows 5-7).
-  M5.Lcd.fillRect(ox + 2 * px,  oy + 5 * px, 2 * px, 3 * px, eyeCol);
-  M5.Lcd.fillRect(ox + 10 * px, oy + 5 * px, 2 * px, 3 * px, eyeCol);
+// A shaded bone blob: a deep-shadow rim, a shadow body offset down-right, the
+// main bone on top, and a soft highlight up-left -> reads as a 3D form.
+void boneBlob(int x, int y, int rx, int ry) {
+  M5.Lcd.fillEllipse(x + 1, y + 2, rx + 1, ry + 1, C_BONE_SH2);  // outline/rim
+  M5.Lcd.fillEllipse(x + 2, y + 3, rx, ry, C_BONE_SH);           // shadow
+  M5.Lcd.fillEllipse(x, y, rx, ry, C_BONE);                      // main bone
+  M5.Lcd.fillEllipse(x - rx / 3, y - ry / 3, rx / 3, ry / 4, C_BONE_HI); // highlight
 }
 
-// Boot splash: an 8-bit skull that laughs (jaw open/shut, pulsing red eyes,
-// bobbing head) with a "HA HA HA!" burst and a progress bar. Runs ~5 seconds.
+// Smooth, vector-drawn skull built from basic forms (reference method: a
+// dominant cranium "sphere", a separate horseshoe jaw, almond eye sockets set
+// as 3D pits, a heart nasal cavity, and teeth). The jaw is a movable piece, so
+// dropping it a few pixels makes the skull laugh.
+// (cx, cy) is the cranium centre. `open` drops the jaw; `eyeCol` pulses the eyes.
+void drawSkull(int cx, int cy, bool open, uint16_t eyeCol) {
+  int jawDrop = open ? 7 : 0;
+
+  // --- Lower jaw (mandible) -- drawn first so the cranium overlaps its top ---
+  int jawTop = cy + 12 + jawDrop;
+  M5.Lcd.fillRoundRect(cx - 23, jawTop + 2, 46, 30, 12, C_BONE_SH2);
+  M5.Lcd.fillRoundRect(cx - 24, jawTop + 1, 46, 30, 12, C_BONE_SH);
+  M5.Lcd.fillRoundRect(cx - 24, jawTop,     46, 28, 12, C_BONE);
+
+  // --- Cranium (dominant shaded sphere) + cheekbones ---
+  boneBlob(cx, cy, 41, 35);
+
+  // --- Eye sockets: almond-shaped 3D pits, slightly below centre ---
+  int ex = 18, ey = cy - 1;
+  // soft shadow seat under each socket for depth
+  M5.Lcd.fillEllipse(cx - ex, ey + 2, 14, 15, C_BONE_SH);
+  M5.Lcd.fillEllipse(cx + ex, ey + 2, 14, 15, C_BONE_SH);
+  M5.Lcd.fillEllipse(cx - ex, ey, 12, 13, C_SOCKET);
+  M5.Lcd.fillEllipse(cx + ex, ey, 12, 13, C_SOCKET);
+  // angled inner-top brow -> gives the skull a bit of attitude
+  M5.Lcd.fillTriangle(cx - 4, cy - 15, cx - 4, cy - 2, cx - 11, cy - 12, C_BONE);
+  M5.Lcd.fillTriangle(cx + 4, cy - 15, cx + 4, cy - 2, cx + 11, cy - 12, C_BONE);
+  // glowing eyes + dark pupils
+  M5.Lcd.fillEllipse(cx - ex, ey + 2, 7, 8, eyeCol);
+  M5.Lcd.fillEllipse(cx + ex, ey + 2, 7, 8, eyeCol);
+  M5.Lcd.fillCircle(cx - ex, ey + 3, 2, C_SOCKET);
+  M5.Lcd.fillCircle(cx + ex, ey + 3, 2, C_SOCKET);
+
+  // --- Nasal cavity: heart / inverted triangle ---
+  int ny = cy + 9;
+  M5.Lcd.fillTriangle(cx - 6, ny, cx + 6, ny, cx, ny + 13, C_SOCKET);
+  M5.Lcd.fillCircle(cx - 3, ny + 1, 3, C_SOCKET);
+  M5.Lcd.fillCircle(cx + 3, ny + 1, 3, C_SOCKET);
+
+  // --- Teeth / mouth (over the cranium-jaw junction) ---
+  const int mw = 40, mx = cx - mw / 2;
+  int upperY = cy + 23;
+  M5.Lcd.fillRoundRect(mx, upperY, mw, 8, 2, C_BONE);          // upper teeth strip
+  for (int tx = mx + 6; tx < mx + mw; tx += 6)
+    M5.Lcd.drawFastVLine(tx, upperY, 8, C_BONE_SH2);           // tooth gaps
+
+  if (open) {
+    M5.Lcd.fillRect(mx + 2, upperY + 8, mw - 4, 7 + jawDrop, C_SOCKET);  // open mouth
+    int lowerY = upperY + 15 + jawDrop;
+    M5.Lcd.fillRoundRect(mx + 4, lowerY, mw - 8, 7, 2, C_BONE);          // lower teeth
+    for (int tx = mx + 10; tx < mx + mw - 4; tx += 6)
+      M5.Lcd.drawFastVLine(tx, lowerY, 7, C_BONE_SH2);
+  } else {
+    int lowerY = upperY + 8;
+    M5.Lcd.fillRoundRect(mx + 2, lowerY, mw - 4, 7, 2, C_BONE);          // lower teeth
+    M5.Lcd.drawFastHLine(mx + 2, upperY + 8, mw - 4, C_BONE_SH2);        // bite line
+    for (int tx = mx + 6; tx < mx + mw - 2; tx += 6)
+      M5.Lcd.drawFastVLine(tx, lowerY, 7, C_BONE_SH2);
+  }
+}
+
+// Boot splash: a smooth vector skull that laughs (jaw drops open/shut, pulsing
+// red eyes, slight head bob) with a "HA HA HA!" burst and a progress bar.
+// Runs ~5 seconds.
 void bootScreen() {
   M5.Lcd.fillScreen(C_BG);
 
@@ -416,13 +431,12 @@ void bootScreen() {
   M5.Lcd.setTextDatum(MC_DATUM);
   M5.Lcd.setTextSize(1);
   M5.Lcd.setTextColor(C_MUTED, C_BG);
-  M5.Lcd.drawString("PORTAL EVIL HUEBR  -  loading", 120, 112);
-  const int bx = 40, by = 122, bw = 160, bh = 8;
+  M5.Lcd.drawString("PORTAL EVIL HUEBR  -  loading", 120, 114);
+  const int bx = 40, by = 124, bw = 160, bh = 7;
   M5.Lcd.drawRoundRect(bx, by, bw, bh, 3, C_MUTED);
 
-  const int px = 5;                 // skull pixel size (14*5 x 16*5 = 70x80)
-  const int ox = (240 - SK_COLS * px) / 2;  // centered horizontally
-  const int oyBase = 6;
+  const int cx = 120;               // skull centre X
+  const int cyBase = 38;            // cranium centre Y
   const unsigned long DURATION = 5000;  // ~5 seconds
   unsigned long start = millis();
   bool open = false;
@@ -430,18 +444,18 @@ void bootScreen() {
   while (millis() - start < DURATION) {
     unsigned long el = millis() - start;
     open = !open;
-    int bob = open ? 2 : 0;  // head/jaw bob
+    int bob = open ? 1 : 0;  // slight head bob
 
     // Clear the skull + laugh-text band, then redraw this frame.
-    M5.Lcd.fillRect(0, 4, 240, 104, C_BG);
-    drawSkull(ox, oyBase + bob, px, open, open ? C_EYE : C_EYEDIM);
+    M5.Lcd.fillRect(0, 0, 240, 110, C_BG);
+    drawSkull(cx, cyBase + bob, open, open ? C_EYE : C_EYEDIM);
 
     // "HA HA HA!" burst on the open-jaw frames.
     if (open) {
       M5.Lcd.setTextDatum(MC_DATUM);
       M5.Lcd.setTextSize(2);
       M5.Lcd.setTextColor(C_EYE, C_BG);
-      M5.Lcd.drawString("HA HA HA!", 120, 98);
+      M5.Lcd.drawString("HA HA HA!", 120, 101);
     }
 
     // Progress bar tracks elapsed time.

@@ -76,7 +76,7 @@ Honeypots Wi-Fi são redes sem fio enganosas que se disfarçam de hotspots legí
 | 🌐 | **Captive portal** via DNS spoofing — any requested domain is redirected to the portal page |
 | 🔐 | Serves a customizable fake **sign-in page** and stores submitted credentials in memory (HTML-escaped on capture) |
 | ⏳ | **Animated “validating access” page** after submission — pure CSS/JS (works offline): pulsing Wi-Fi icon, indeterminate progress bar, spinner and a live countdown |
-| 💀 | **8-bit laughing-skull boot animation** (~5 s) — pixel-art skull with a dropping jaw, pulsing red eyes, a “HA HA HA!” burst and a progress bar |
+| 💀 | **Laughing-skull boot animation** (~5 s) — a smooth vector skull with a dropping jaw, pulsing red eyes, a “HA HA HA!” burst and a progress bar |
 | 🎛️ | **On-device menu** on boot (Tools / Configuration / Exit) — the portal no longer auto-starts; navigate with the two buttons and launch it on demand |
 | 🖥️ | Live stats on the built-in LCD: SSID, the **admin URL** (`http://172.0.0.1/admin`), a **battery gauge** (cell icon + %), and the **victim/capture count** |
 | 🔊 | **Beep + non-blocking LED blink** feedback on every submission (DNS/HTTP keep serving during the blink), both toggleable from the Configuration menu |
@@ -146,7 +146,7 @@ The build writes two files to the **`firmware/`** folder:
 
 ## ▶️ Usage
 
-1. On power-on, the device plays the **8-bit laughing-skull splash** (~5 s) and then opens the **main menu** — it does **not** start the portal automatically.
+1. On power-on, the device plays the **laughing-skull splash** (~5 s) and then opens the **main menu** — it does **not** start the portal automatically.
 2. Use the two buttons to navigate the menu:
    - **Side button (BtnB)** → move the highlight
    - **Front button (BtnA)** → select
@@ -208,6 +208,20 @@ All portal text and branding are set with `#define` values near the top of
 
 > [!TIP]
 > The login page markup lives in the `index()` function — edit it to change the look or the service being impersonated for your demo.
+
+### 📟 Runtime settings (on-device)
+
+These are changed live from the **Configuration** menu — no reflashing needed. They live in RAM and reset to their defaults on each power-on:
+
+| Setting | Purpose | Default |
+| --- | --- | --- |
+| `Beep` | Beep on capture (and on the boot animation) | `ON` |
+| `LED blink` | Blink the LED on each capture | `ON` |
+| `Brightness` | Screen brightness level (1–3) | `3` |
+
+### 🎨 Boot animation
+
+The laughing skull is drawn with vector primitives (not a bitmap), so it stays crisp. Its colors and proportions are defined near the top of the sketch (`C_BONE*`, `C_SOCKET`, `C_EYE*`) and in `drawSkull()` — tweak those to restyle it.
 
 ---
 
